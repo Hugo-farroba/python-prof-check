@@ -1,14 +1,10 @@
 from fastapi import FastAPI
 from profanity_check import predict_prob
-from pydantic import BaseModel
 
 app = FastAPI()
 
-class Username(BaseModel):
-    text: str
-
 @app.post("/check-username")
-async def check_username(username: Username):
+async def check_username(username):
     score = predict_prob([username.text])[0]
     
     return {
