@@ -27,13 +27,13 @@ def get_db():
 async def check_username(username: Username, db: Session = Depends(get_db)):
     try:        
         # Check if username is blocked in database
-        blocked = db.query(BlockedUsername).filter(BlockedUsername.username == username.text).first()
+        blocked = db.query(BlockedUsername).filter(BlockedUsername.username == username.username).first()
         
         # Check profanity
-        score = float(predict_prob([username.text])[0])
+        score = float(predict_prob([username.username])[0])
         
         return {
-            "text": username.text,
+            "username": username.username,
             "is_inappropriate": bool(score > 0.7),
             "is_blocked": blocked is not None,
             "confidence": score,
@@ -45,10 +45,10 @@ async def check_username(username: Username, db: Session = Depends(get_db)):
 @app.post("/block-username")
 async def block_username(username: Username, db: Session = Depends(get_db)):
     try:
-        blocked = BlockedUsername(username=username.text)
+        blocked = BlockedUsername(username=username.username)
         db.add(blocked)
         db.commit()
-        return {"message": f"Username '{username.text}' has been blocked"}
+        return {"message": f"Username '{username.username}' has been blocked"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
