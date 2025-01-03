@@ -1,2 +1,2 @@
 fastapi==0.115.6
-profanity-check==1.0.3
+alt-profanity-check==1.5.2
