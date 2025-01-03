@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from profanity_check import predict_prob
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -36,11 +37,14 @@ def create_db_and_tables():
 class Username(BaseModel):
     text: str
 
-app = FastAPI()
-
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Setup
     create_db_and_tables()
+    yield
+    # Cleanup (if needed)
+
+app = FastAPI(lifespan=lifespan)
 
 @app.post("/check-username")
 async def check_username(username: Username):
