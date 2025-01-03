@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from profanity_check import predict_prob
@@ -23,12 +24,25 @@ if not DATABASE_URL:
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Create engine
+# Create engine first
 engine = create_engine(
     DATABASE_URL,
     echo=True,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300
 )
+
+# Then test connection
+logger.info("Attempting database connection...")
+try:
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    logger.info("Database connection successful")
+except Exception as e:
+    logger.error(f"Database connection failed: {str(e)}")
+    raise
 
 # Create tables
 def create_db_and_tables():
@@ -37,14 +51,7 @@ def create_db_and_tables():
 class Username(BaseModel):
     text: str
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Setup
-    create_db_and_tables()
-    yield
-    # Cleanup (if needed)
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 @app.post("/check-username")
 async def check_username(username: Username):
