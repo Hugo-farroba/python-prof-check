@@ -35,6 +35,25 @@ async def check_aws_sentiment(text: str):
     except Exception as e:
         return {"is_hate_speech": False, "confidence": 0}
 
+def generate_username_variations(username: str) -> list:
+    variations = [username]
+    if '_' in username:
+        variations.append(username.replace('_', ' '))
+    return variations
+
+async def check_and_block_username(usernames: list, reason: str, confidence: float, db: Session):
+    for username in usernames:
+        existing = db.query(BlockedUsername).filter(BlockedUsername.username == username).first()
+        if not existing:
+            blocked = BlockedUsername(username=username)
+            db.add(blocked)
+    db.commit()
+    return {
+        "username": usernames[0],
+        "is_inappropriate": True,
+        "reason": reason,
+        "confidence": confidence
+    }
 
 # Dependency to get database session
 def get_db():
@@ -47,37 +66,49 @@ def get_db():
 @app.post("/check-username")
 async def check_username(username: Username, db: Session = Depends(get_db)):
     try:
-        # Step 1: Check if username is blocked in database
-        blocked = db.query(BlockedUsername).filter(
-            BlockedUsername.username == username.username
-        ).first()
+        username_variations = generate_username_variations(username.username)
         
-        if blocked:
-            return {
-                "username": username.username,
-                "is_inappropriate": True,
-                "reason": "database_blocked"
-            }
+        # Step 1: Check if any variation is blocked in database
+        for variation in username_variations:
+            blocked = db.query(BlockedUsername).filter(
+                BlockedUsername.username == variation
+            ).first()
+            if blocked:
+                return {
+                    "username": username.username,
+                    "is_inappropriate": True,
+                    "reason": "database_blocked"
+                }
 
-        # Step 2: Check AWS Comprehend
-        aws_result = await check_aws_sentiment(username.username)
-        if aws_result["is_hate_speech"]:
-            return {
-                "username": username.username,
-                "is_inappropriate": True,
-                "reason": "aws_comprehend",
-                "confidence": aws_result["confidence"]
-            }
+        # Step 2: Check AWS Comprehend for all variations
+        for variation in username_variations:
+            aws_result = await check_aws_sentiment(variation)
+            if aws_result["is_hate_speech"]:
+                return await check_and_block_username(
+                    username_variations,
+                    "aws_comprehend",
+                    aws_result["confidence"],
+                    db
+                )
 
-        # Step 3: Check profanity
-        profanity_score = float(predict_prob([username.username])[0])
+        # Step 3: Check profanity for all variations
+        for variation in username_variations:
+            profanity_score = float(predict_prob([variation])[0])
+            if profanity_score > 0.7:
+                return await check_and_block_username(
+                    username_variations,
+                    "profanity_check",
+                    profanity_score,
+                    db
+                )
         
         return {
             "username": username.username,
-            "is_inappropriate": profanity_score > 0.7,
-            "reason": "profanity_check" if profanity_score > 0.7 else None,
-            "confidence": profanity_score
+            "is_inappropriate": False,
+            "reason": None,
+            "confidence": 0
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
