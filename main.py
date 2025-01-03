@@ -11,7 +11,7 @@ from database import SessionLocal, BlockedUsername
 load_dotenv()
 
 class Username(BaseModel):
-    text: str
+    username: str
 
 app = FastAPI()
 
