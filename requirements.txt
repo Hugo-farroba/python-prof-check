@@ -5,3 +5,4 @@ python-dotenv
 sqlalchemy 
 psycopg2-binary
 hypercorn==0.14.4
+boto3
